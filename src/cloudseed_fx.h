@@ -48,9 +48,14 @@ public:
 	unsigned TailFrames () const override { return 48000 * 10; } // 10s tail
 
 private:
-	void LoadPreset (int nPreset);
+	// Called from DMA context (Process()) — safe from the audio thread.
+	void ApplyPreset (int nPreset);
 
 private:
 	Cloudseed::ReverbController *m_pReverb;	// heap-allocated in Init()
-	int	m_nPreset;			// 0-15
+	int	m_nPreset;			// current preset (display)
+
+	// Preset pending handoff: main loop writes, Process() reads+clears.
+	// volatile so the compiler doesn't cache across the DMA boundary.
+	volatile int m_nPresetPending;	// -1 = none, 0-15 = load this preset
 };

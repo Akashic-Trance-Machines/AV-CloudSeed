@@ -93,7 +93,8 @@ static const TParamDesc s_NullParam = { "", "", ParamType::Float, ParamDisplay::
 
 CCloudSeedFX::CCloudSeedFX ()
 :	m_pReverb (nullptr),
-	m_nPreset (0)
+	m_nPreset (0),
+	m_nPresetPending (-1)
 {
 }
 
@@ -109,13 +110,14 @@ void CCloudSeedFX::Init (unsigned nSampleRate, unsigned /*nMaxBlock*/)
 	// Heap-allocate the reverb engine (~65MB of delay lines).
 	// This is the only allocation; Process() is allocation-free.
 	m_pReverb = new Cloudseed::ReverbController ((int) nSampleRate);
-	LoadPreset (0);
+	ApplyPreset (0);		// safe — audio not running yet
+	m_nPresetPending = -1;
 }
 
 void CCloudSeedFX::Reset ()
 {
-	if (m_pReverb)
-		LoadPreset (m_nPreset);
+	// Queue the current preset for reload at the next audio block.
+	m_nPresetPending = m_nPreset;
 }
 
 unsigned CCloudSeedFX::NumParams () const { return NUM_PARAMS; }
@@ -138,11 +140,13 @@ void CCloudSeedFX::SetParam (unsigned idx, TParamValue v)
 	if (idx == 0)
 	{
 		int preset = v.AsInt ();
-		if (preset < 0)          preset = 0;
+		if (preset < 0)            preset = 0;
 		if (preset >= NUM_PRESETS) preset = NUM_PRESETS - 1;
-		LoadPreset (preset);
+		m_nPreset       = preset;
+		m_nPresetPending = preset;	// applied safely in next Process() call
 		return;
 	}
+	// Individual param tweaks go directly — single-word write, minimal race risk.
 	unsigned csIdx = idx - 1;
 	if (!m_pReverb || csIdx >= 45) return;
 	m_pReverb->SetParameter (csIdx, v.f);
@@ -163,16 +167,42 @@ size_t CCloudSeedFX::Deserialize (const uint8_t *, size_t)   { return 0; }
 void CCloudSeedFX::Process (float *pIoL, float *pIoR, unsigned nFrames)
 {
 	if (!m_pReverb) return;
+
+	// Apply a pending preset change at the top of this block (audio thread,
+	// no race with SetParam in the main loop). Output silence this block
+	// so the delay line reinit doesn't produce a click/pop.
+	int pending = m_nPresetPending;
+	if (pending >= 0)
+	{
+		m_nPresetPending = -1;
+		ApplyPreset (pending);
+		memset (pIoL, 0, nFrames * sizeof (float));
+		memset (pIoR, 0, nFrames * sizeof (float));
+		return;
+	}
+
+	// Save the dry input — CloudSeed replaces the buffers in-place, but some
+	// presets have DryOut=0 which silences the generator completely.
+	// We blend a guaranteed 50% dry floor so the synth is always audible.
+	float dryL[256], dryR[256];
+	const unsigned n = nFrames < 256 ? nFrames : 256;
+	for (unsigned i = 0; i < n; i++) { dryL[i] = pIoL[i]; dryR[i] = pIoR[i]; }
+
 	m_pReverb->Process (pIoL, pIoR, pIoL, pIoR, (int) nFrames);
+
+	// Mix 50% dry back in so dry signal always reaches the output.
+	for (unsigned i = 0; i < n; i++)
+	{
+		pIoL[i] += dryL[i] * 0.5f;
+		pIoR[i] += dryR[i] * 0.5f;
+	}
 }
 
 // ── Private ──────────────────────────────────────────────────────────────────
 
-void CCloudSeedFX::LoadPreset (int nPreset)
+void CCloudSeedFX::ApplyPreset (int nPreset)
 {
-	m_nPreset = nPreset;
 	if (!m_pReverb) return;
-
 	const float *data = CSPresets[nPreset];
 	for (int i = 0; i < 45; i++)
 		m_pReverb->SetParameter (i, data ? data[i] : 0.0f);
