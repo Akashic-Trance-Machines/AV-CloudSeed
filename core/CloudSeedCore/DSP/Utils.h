@@ -1,0 +1,78 @@
+/*
+Copyright (c) 2024 Ghost Note Engineering Ltd
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+
+#pragma once
+
+#define DUP1( X ) ( X )
+#define DUP2( X ) DUP1( X ), ( X )
+#define DUP3( X ) DUP2( X ), ( X )
+#define DUP4( X ) DUP2( X ), DUP2( X )
+#define DUP8( X ) DUP4( X ), DUP4( X )
+#define DUP12( X ) DUP8( X ), DUP4( X )
+
+#define DUPx( X, N ) DUP##N( X )
+#define DUP( X, N ) DUPx( X, N )
+
+#define _USE_MATH_DEFINES 1
+#include <math.h>
+#include <stdint.h>
+
+namespace Cloudseed
+{
+    namespace Utils
+    {
+        inline constexpr float dB2Gain(float input)
+        {
+            //return std::pow(10.0f, input / 20.0f);
+            return powf(10, input * 0.05f);
+        }
+
+        constexpr float dec1Mult = (10 / 9.0) * 0.1;
+        constexpr float dec2Mult = (100 / 99.0) * 0.01;
+        constexpr float dec3Mult = (1000 / 999.0) * 0.001;
+        constexpr float dec4Mult = (10000 / 9999.0) * 0.0001;
+
+        constexpr float oct1Mult = (2 / 1.0) * 0.5;
+        constexpr float oct2Mult = (4 / 3.0) * 0.25;
+        constexpr float oct3Mult = (8 / 7.0) * 0.125;
+        constexpr float oct4Mult = (16 / 15.0) * 0.0625;
+        constexpr float oct5Mult = (32 / 31.0) * 0.03125;
+        constexpr float oct6Mult = (64 / 63.0) * 0.015625;
+        constexpr float oct7Mult = (128 / 127.0) * 0.0078125;
+        constexpr float oct8Mult = (256 / 255.0) * 0.00390625;
+
+        inline constexpr float Resp1dec(float x) { return (powf(10, x) - 1) * dec1Mult; }
+        inline constexpr float Resp2dec(float x) { return (powf(10, 2 * x) - 1) * dec2Mult; }
+        inline constexpr float Resp3dec(float x) { return (powf(10, 3 * x) - 1) * dec3Mult; }
+        inline constexpr float Resp4dec(float x) { return (powf(10, 4 * x) - 1) * dec4Mult; }
+
+        inline constexpr float Resp1oct(float x) { return (powf(2, x) - 1) * oct1Mult; }
+        inline constexpr float Resp2oct(float x) { return (powf(2, 2 * x) - 1) * oct2Mult; }
+        inline constexpr float Resp3oct(float x) { return (powf(2, 3 * x) - 1) * oct3Mult; }
+        inline constexpr float Resp4oct(float x) { return (powf(2, 4 * x) - 1) * oct4Mult; }
+        inline constexpr float Resp5oct(float x) { return (powf(2, 5 * x) - 1) * oct5Mult; }
+        inline constexpr float Resp6oct(float x) { return (powf(2, 6 * x) - 1) * oct6Mult; }
+        inline constexpr float Resp7oct(float x) { return (powf(2, 7 * x) - 1) * oct7Mult; }
+        inline constexpr float Resp8oct(float x) { return (powf(2, 8 * x) - 1) * oct8Mult; }
+       
+    }
+}

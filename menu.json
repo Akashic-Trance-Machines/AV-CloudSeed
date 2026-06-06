@@ -1,0 +1,26 @@
+{
+  "id": "cloudseed",
+  "name": "CloudSeed",
+  "kind": "audiofx",
+  "version": 1,
+  "credits": "Ghost Note Engineering Ltd; port: Akashic Trance Machines",
+  "license": "MIT",
+
+  "params": [
+    { "id": "preset",       "label": "Preset",      "type": "enum", "default": 0,
+      "options": ["Init","Divine Inspiration","Laws Of Physics","Slow Braaam",
+                  "The Upside Down","Big Sound Stage","Diffusion Cyclone",
+                  "Scream Into Void","90s Digital","Airy Ambience",
+                  "Dark Plate","Ghostly","Tapped Lines",
+                  "Fast Attack","Small Plate","Snappy Attack"] },
+    { "id": "dry_out",      "label": "Dry Out",     "type": "float", "min": 0.0, "max": 1.0, "default": 1.0, "step": 0.01, "display": "percent" },
+    { "id": "early_out",    "label": "Early Out",   "type": "float", "min": 0.0, "max": 1.0, "default": 0.0, "step": 0.01, "display": "percent" },
+    { "id": "late_out",     "label": "Late Out",    "type": "float", "min": 0.0, "max": 1.0, "default": 0.0, "step": 0.01, "display": "percent" },
+    { "id": "late_decay",   "label": "Late Decay",  "type": "float", "min": 0.0, "max": 1.0, "default": 0.5, "step": 0.01, "display": "percent" },
+    { "id": "input_mix",    "label": "Input Mix",   "type": "float", "min": 0.0, "max": 1.0, "default": 1.0, "step": 0.01, "display": "percent" }
+  ],
+
+  "menu": [
+    { "page": "Main", "items": ["preset", "dry_out", "early_out", "late_out", "late_decay", "input_mix"] }
+  ]
+}
