@@ -13,6 +13,7 @@
 #include "cloudseed_fx.h"
 #include "CloudSeedCore/DSP/ReverbController.h"
 #include <cstring>
+#include <cmath>
 #include <cstdio>
 
 #include "presets.h"
@@ -94,7 +95,9 @@ static const TParamDesc s_NullParam = { "", "", ParamType::Float, ParamDisplay::
 CCloudSeedFX::CCloudSeedFX ()
 :	m_pReverb (nullptr),
 	m_nPreset (0),
-	m_nPresetPending (-1)
+	m_nPresetPending (-1),
+	m_bClearing (false),
+	m_nClearBytesPerBlock (49152)	// 12288 floats × 4 bytes; clears ~65MB in ~1400 blocks (~7s)
 {
 }
 
@@ -112,6 +115,10 @@ void CCloudSeedFX::Init (unsigned nSampleRate, unsigned /*nMaxBlock*/)
 	m_pReverb = new Cloudseed::ReverbController ((int) nSampleRate);
 	ApplyPreset (0);		// safe — audio not running yet
 	m_nPresetPending = -1;
+	m_bClearing = false;
+	// Size each slow-clear step to clear all 65MB in ~1400 blocks (~7s at 48kHz/256).
+	// Larger values clear faster but consume more CPU per block.
+	m_nClearBytesPerBlock = 49152;
 }
 
 void CCloudSeedFX::Reset ()
@@ -168,29 +175,58 @@ void CCloudSeedFX::Process (float *pIoL, float *pIoR, unsigned nFrames)
 {
 	if (!m_pReverb) return;
 
-	// Apply a pending preset change at the top of this block (audio thread,
-	// no race with SetParam in the main loop). Output silence this block
-	// so the delay line reinit doesn't produce a click/pop.
+	const unsigned n = nFrames < 256 ? nFrames : 256;
+
+	// Save dry input — some presets have DryOut=0, so we always blend 50% dry
+	// back in to guarantee the synth is audible regardless of preset.
+	float dryL[256], dryR[256];
+	for (unsigned i = 0; i < n; i++) { dryL[i] = pIoL[i]; dryR[i] = pIoR[i]; }
+
+	// ── Pending preset: apply parameters then start a slow clear ────────────
 	int pending = m_nPresetPending;
 	if (pending >= 0)
 	{
 		m_nPresetPending = -1;
 		ApplyPreset (pending);
-		memset (pIoL, 0, nFrames * sizeof (float));
-		memset (pIoR, 0, nFrames * sizeof (float));
+		m_pReverb->StartSlowClear ();
+		m_bClearing = true;
+	}
+
+	// ── Slow-clear phase: zero the delay buffers, pass dry through ───────────
+	if (m_bClearing)
+	{
+		int bytesThisBlock = m_nClearBytesPerBlock;
+		if (m_pReverb->SlowClearDone (bytesThisBlock))
+			m_bClearing = false;	// all 65MB of delay lines are now zeroed
+
+		// Pass dry signal through unchanged while clearing.
+		for (unsigned i = 0; i < n; i++)
+		{
+			pIoL[i] = dryL[i];
+			pIoR[i] = dryR[i];
+		}
 		return;
 	}
 
-	// Save the dry input — CloudSeed replaces the buffers in-place, but some
-	// presets have DryOut=0 which silences the generator completely.
-	// We blend a guaranteed 50% dry floor so the synth is always audible.
-	float dryL[256], dryR[256];
-	const unsigned n = nFrames < 256 ? nFrames : 256;
-	for (unsigned i = 0; i < n; i++) { dryL[i] = pIoL[i]; dryR[i] = pIoR[i]; }
-
+	// ── Normal processing ────────────────────────────────────────────────────
 	m_pReverb->Process (pIoL, pIoR, pIoL, pIoR, (int) nFrames);
 
-	// Mix 50% dry back in so dry signal always reaches the output.
+	// NaN/Inf guard: if the reverb produced garbage, reset and recover.
+	// Check just the first sample — NaN propagates uniformly.
+	if (!std::isfinite (pIoL[0]) || !std::isfinite (pIoR[0]))
+	{
+		m_pReverb->StartSlowClear ();
+		m_bClearing = true;
+		// Fall through: pass dry signal out this block.
+		for (unsigned i = 0; i < n; i++)
+		{
+			pIoL[i] = dryL[i];
+			pIoR[i] = dryR[i];
+		}
+		return;
+	}
+
+	// Mix 50% dry back in so synth is always audible.
 	for (unsigned i = 0; i < n; i++)
 	{
 		pIoL[i] += dryL[i] * 0.5f;

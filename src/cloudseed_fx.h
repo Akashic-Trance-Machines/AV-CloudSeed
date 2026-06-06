@@ -58,4 +58,8 @@ private:
 	// Preset pending handoff: main loop writes, Process() reads+clears.
 	// volatile so the compiler doesn't cache across the DMA boundary.
 	volatile int m_nPresetPending;	// -1 = none, 0-15 = load this preset
+
+	// Slow-clear state: while m_bClearing, pass dry through and zero delay lines.
+	bool	m_bClearing;
+	int	m_nClearBytesPerBlock;	// bytes to clear per Process() call
 };
